@@ -28,6 +28,8 @@ func CreateProducts(c *fiber.Ctx) error {
 	}
 	database.DB.Create(&product)
 
+	go database.ClearCache("products_frontend", "products_backend")
+
 	return c.JSON(product)
 }
 
@@ -54,9 +56,17 @@ func UpdateProducts(c *fiber.Ctx) error {
 		return err
 	}
 	database.DB.Model(&product).Updates(&product)
+
+	go database.ClearCache("products_frontend", "products_backend")
 	return c.JSON(product)
 
 }
+func deleteCash(key string) {
+	time.Sleep(3 * time.Second)
+
+	database.Cache.Del(context.Background(), key)
+}
+
 func DeleteProduct(c *fiber.Ctx) error {
 	id, _ := strconv.Atoi(c.Params("id"))
 
@@ -64,6 +74,7 @@ func DeleteProduct(c *fiber.Ctx) error {
 
 	product.Id = uint(id)
 	database.DB.Delete(&product)
+	go database.ClearCache("products_frontend", "products_backend")
 	return nil
 }
 
@@ -138,5 +149,24 @@ func ProductsBackend(c *fiber.Ctx) error {
 		}
 	}
 
-	return c.JSON(searchedProducts)
+	var total = len(searchedProducts)
+
+	page, _ := strconv.Atoi(c.Query("page", "1"))
+	perPage := 9
+
+	var data []models.Product
+
+	if total <= page*perPage && total >= (page-1)*perPage {
+		data = searchedProducts[(page-1)*perPage : total]
+	} else if total >= page*perPage {
+		data = searchedProducts[(page-1)*perPage : page*perPage]
+	} else {
+		data = []models.Product{}
+	}
+	return c.JSON(fiber.Map{
+		"data":      data,
+		"total":     total,
+		"page":      page,
+		"last_page": total/perPage + 1,
+	})
 }
