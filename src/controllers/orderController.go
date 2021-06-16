@@ -4,9 +4,11 @@ import (
 	"ambassador/src/database"
 	"ambassador/src/models"
 	"context"
+	"fmt"
 	"github.com/gofiber/fiber/v2"
 	"github.com/stripe/stripe-go/v72"
 	"github.com/stripe/stripe-go/v72/checkout/session"
+	"net/smtp"
 )
 
 func Order(c *fiber.Ctx) error {
@@ -177,6 +179,14 @@ func CompleteOrder(c *fiber.Ctx) error {
 		database.DB.First(&user)
 
 		database.Cache.ZIncrBy(context.Background(), "rankings", ambassadorRevenue, user.Name())
+
+		ambassadorMessage := []byte(fmt.Sprintf("You earned $%f from the link the link #%s", ambassadorRevenue, order.Code))
+
+		smtp.SendMail("host.docker.internal:1025", nil, "no-reply@gmail.com", []string{order.AmbassadorEmail}, ambassadorMessage)
+
+		adminMessage := []byte(fmt.Sprintf("Order #%d with a total of $%f", order.Id, adminRevenue))
+
+		smtp.SendMail("host.docker.internal:1025", nil, "no-reply@gmail.com", []string{"admin@admin.com"}, adminMessage)
 
 	}(order)
 
